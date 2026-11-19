@@ -125,6 +125,8 @@ def check_giveaway(nick: str, text: str, important: bool, line: str, emotes_tag:
             continue
         if not looks_like_giveaway_code(tok) or tok in alerted:
             continue
+        if len(set(tok.lower())) <= 3:     # xDDDDDDD, hahahaha
+            continue
         if tok.lower() in known_names:   # meno chattera, nie kod
             continue
         users = seen_by.setdefault(tok, set())
