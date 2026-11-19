@@ -32,6 +32,13 @@ MIN_LEN = 8             # kratsie slova su skoro vzdy sum z ikon/HUD
 
 BASE = Path(__file__).parent
 HITS = BASE / "ocr_hits"
+import unicodedata
+
+
+def strip_accents(s: str) -> str:
+    """Zitrek -> Zitrek: pismena s diakritikou na zakladne (dlzka textu ostava rovnaka)."""
+    return "".join(c for c in unicodedata.normalize("NFKD", s) if not unicodedata.combining(c))
+
 TOKEN_RE = re.compile(r"(?<![A-Za-z0-9])[A-Za-z0-9]{6,20}(?![A-Za-z0-9])")
 
 
@@ -55,7 +62,8 @@ def looks_like_code(tok: str) -> bool:
         return False
     letters = [c for c in tok if c.isalpha()]
     switches = sum(a.isupper() != b.isupper() for a, b in zip(letters, letters[1:]))
-    if not has_digit and switches > 3:     # rozskakane pismena typu "pRoFILes"
+    camel = re.fullmatch(r"(?:[A-Z][a-z]{2,}|[A-Z0-9]{2,})+", tok)   # ZitrekBudeLepsi, PrvniGTAVI
+    if not has_digit and switches > 3 and not camel:   # rozskakane pismena typu "pRoFILes"
         return False
     return has_alpha and (has_digit or mixed)
 
@@ -94,6 +102,7 @@ class Detector:
         self.started = None
 
     def feed(self, t: float, text: str):
+        text = strip_accents(text)
         if self.started is None:
             self.started = t
         new = []

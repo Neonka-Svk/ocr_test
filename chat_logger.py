@@ -30,6 +30,13 @@ IMPORTANT_BADGES = ("broadcaster", "moderator", "vip")
 
 
 # kod na stream.herdyn.cz ma presne 12 znakov
+import unicodedata
+
+
+def strip_accents(s: str) -> str:
+    """Zitrek -> Zitrek: pismena s diakritikou na zakladne (dlzka textu ostava rovnaka)."""
+    return "".join(c for c in unicodedata.normalize("NFKD", s) if not unicodedata.combining(c))
+
 GIVEAWAY_RE = re.compile(r"(?<![A-Za-z0-9])[A-Za-z0-9]{8,20}(?![A-Za-z0-9])")
 alert_log = log_dir / f"{channel}_{stamp}_ALERT.log"
 seen_by: dict[str, set[str]] = {}   # kandidat -> kto ho napisal
@@ -111,6 +118,7 @@ def emote_spans(emotes_tag: str):
 
 
 def check_giveaway(nick: str, text: str, important: bool, line: str, emotes_tag: str = "") -> None:
+    text = strip_accents(text)
     known_names.add(nick.lower())
     if nick.lower() in BOTS:
         return
@@ -121,7 +129,9 @@ def check_giveaway(nick: str, text: str, important: bool, line: str, emotes_tag:
         tok = m.group(0)
         if any(m.start() <= e and s <= m.end() - 1 for s, e in spans):   # oficialny emote
             continue
-        if EMOTE_LIKE_RE.match(tok) or re.fullmatch(r"(?:[A-Z][a-z]+){2,}", tok):  # 7TV/BTTV emote
+        # 7TV/BTTV emote (FeelsDankMan). Dlhsie CamelCase (ZitrekBudeLepsi) alebo pri slove "kod" nechame prejst.
+        kod_ctx = re.search(r"k[oó]d|code", text, re.IGNORECASE)
+        if EMOTE_LIKE_RE.match(tok) or (re.fullmatch(r"(?:[A-Z][a-z]+){2,}", tok) and len(tok) <= 12 and not kod_ctx):
             continue
         if not looks_like_giveaway_code(tok) or tok in alerted:
             continue
@@ -183,6 +193,7 @@ def candidates(now: float, top: int = 5):
 
 def observe(nick: str, text: str, emotes_tag: str, ts: float, line: str) -> None:
     """Hlasi, ked viac roznych ludi potvrdi, ze kod zabral. Holy '!kod' spam sa ignoruje."""
+    text = strip_accents(text)
     known_names.add(nick.lower())
     recent.append((ts, nick, text, emotes_tag))
     while recent and ts - recent[0][0] > 180:
