@@ -1,0 +1,56 @@
+name: Herdyn - sledovanie kodu
+
+on:
+  schedule:
+    # casy su v UTC. V zime je Slovensko UTC+1, v lete UTC+2.
+    - cron: "50 14 * * *"   # 15:50 SK -> bezi cca do 21:45
+    - cron: "30 20 * * *"   # 21:30 SK -> bezi cca do 03:25 (prekryv s prvym behom)
+  workflow_dispatch:        # rucne spustenie z GitHubu (Actions -> Run workflow)
+    inputs:
+      minutes:
+        description: "Kolko minut ma bezat (max 345)"
+        default: "345"
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    env:
+      NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+      OCR_FPS: "1"            # server ma menej vykonu ako tvoj PC
+      OCR_WORKERS: "4"
+      OCR_CONFIRM: "4"        # pri 1 fps = kandidat musi byt na obraze 4 s
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalacia (tesseract, ffmpeg, streamlink)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq tesseract-ocr ffmpeg
+          pip install -q streamlink
+
+      - name: Test notifikacie
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          curl -s -H "Title: Herdyn sledovanie spustene" -d "Test z GitHub Actions - ak toto vidis, notifikacie funguju." "https://ntfy.sh/$NTFY_TOPIC" > /dev/null
+
+      - name: Sledovanie chatu + obrazu
+        run: |
+          MIN="${{ github.event.inputs.minutes || '345' }}"
+          python chat_logger.py herdyn > chat.out 2>&1 &
+          timeout "$((MIN * 60))" python live_ocr.py herdyn || true
+          kill %1 || true
+          tail -n 50 chat.out
+
+      - name: Ulozenie logov
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logy-${{ github.run_id }}
+          path: |
+            logs/
+            ocr_hits/
+            chat.out
+          retention-days: 7
+          if-no-files-found: ignore
