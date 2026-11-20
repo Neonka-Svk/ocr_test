@@ -3,13 +3,19 @@ name: Herdyn - sledovanie kodu
 on:
   schedule:
     # casy su v UTC. V zime je Slovensko UTC+1, v lete UTC+2.
-    - cron: "50 14 * * *"   # 15:50 SK -> bezi cca do 21:45
-    - cron: "30 20 * * *"   # 21:30 SK -> bezi cca do 03:25 (prekryv s prvym behom)
+    # GitHub planovane behy casto meska alebo vynecha, preto viac pokusov.
+    # Vdaka "concurrency" nizsie bezi vzdy len jeden beh, dalsie pockaju / zahodia sa.
+    - cron: "*/15 14-20 * * *"   # kazdych 15 min medzi 15:00 a 21:59 SK
+    - cron: "*/30 21-23 * * *"   # 22:00 - 00:59 SK
   workflow_dispatch:        # rucne spustenie z GitHubu (Actions -> Run workflow)
     inputs:
       minutes:
         description: "Kolko minut ma bezat (max 345)"
         default: "345"
+
+concurrency:
+  group: herdyn-watch
+  cancel-in-progress: false   # bezi jeden, dalsi caka; ked ten skonci, hned nastupi dalsi
 
 jobs:
   watch:
